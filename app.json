@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Lumio Pathways",
+    "slug": "lumio-pathways",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "lumio",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FBBF24"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lumiopathways.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#FBBF24"
+      },
+      "package": "com.lumiopathways.app",
+      "versionCode": 1
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "lumio-pathways-app"
+      }
+    }
+  }
+}
