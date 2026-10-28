@@ -1,6 +1,3 @@
-/**
- * Lumio Pathways — Entry / Splash redirect
- */
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
@@ -9,13 +6,20 @@ import { auth } from '../lib/supabase';
 export default function Index() {
   useEffect(() => {
     const timer = setTimeout(() => {
-      const { data } = auth.getSession();
-      if (data.session) {
-        router.replace('/onboarding');
-      } else {
-        router.replace('/auth/sign-in');
+      try {
+        const { data } = auth.getSession();
+        if (data.session) {
+          router.replace('/onboarding');
+        } else {
+          router.replace('/auth/sign-in');
+        }
+      } catch (e) {
+        // If navigation fails, try again after another delay
+        setTimeout(() => {
+          router.replace('/auth/sign-in');
+        }, 500);
       }
-    }, 100);
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 
