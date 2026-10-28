@@ -15,7 +15,16 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lumiopathways.app",
-      "buildNumber": "1"
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Lumio Pathways does not use the camera.",
+        "NSPhotoLibraryUsageDescription": "Lumio Pathways does not access your photo library.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyCollectedDataTypes": [],
+        "NSPrivacyAccessedAPITypes": []
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,15 +41,28 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBBF24"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "lumio-pathways-app"
+        "projectId": "a232ad56-1943-44cc-a624-5410b1405e66"
       }
-    }
+    },
+    "owner": "lumiopathways"
   }
 }

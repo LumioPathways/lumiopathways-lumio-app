@@ -7,9 +7,10 @@
 import React, { useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, ScrollView,
+  SafeAreaView, ScrollView, Linking, Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { auth, getUserEmail } from '../lib/supabase';
 
 const DOMAIN_LABELS: Record<string, string> = {
   sensory: 'Sensory processing',
@@ -49,6 +50,22 @@ export default function Results() {
   const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   const topNeed = sorted[0]?.[0] ?? '';
   const strength = sorted[sorted.length - 1]?.[0] ?? '';
+
+  const handleGetFullReport = () => {
+    const parentEmail = getUserEmail() ?? '';
+    const subject = encodeURIComponent(`Lumio full report request — ${childName}`);
+    const body = encodeURIComponent(
+      `Hi Lumio team,\n\nI'd like the full assessment report for ${childName} (age band: ${ageBand}).\n\nParent email: ${parentEmail}\n\nThank you.`
+    );
+    Linking.openURL(`mailto:hello@lumiopathways.co.uk?subject=${subject}&body=${body}`).catch(() =>
+      Alert.alert('Could not open email app', 'Please email hello@lumiopathways.co.uk to request the full report.')
+    );
+  };
+
+  const handleSignOut = async () => {
+    await auth.signOut();
+    router.replace('/auth/sign-in');
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -109,7 +126,7 @@ export default function Results() {
         ) : null}
 
         {/* CTAs */}
-        <TouchableOpacity style={styles.primaryBtn}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleGetFullReport}>
           <Text style={styles.primaryBtnText}>Get the full report</Text>
         </TouchableOpacity>
 
@@ -118,6 +135,10 @@ export default function Results() {
           onPress={() => router.replace('/onboarding')}
         >
           <Text style={styles.secondaryBtnText}>Assess another child</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+          <Text style={styles.signOutText}>Sign out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -194,4 +215,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnText: { color: '#374151', fontWeight: '600', fontSize: 16 },
+
+  signOutBtn: {
+    marginTop: 24,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  signOutText: { color: '#9CA3AF', fontSize: 14, fontWeight: '500' },
 });
