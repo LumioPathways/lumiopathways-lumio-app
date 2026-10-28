@@ -12,12 +12,13 @@ import { auth } from '../lib/supabase';
 
 export default function Index() {
   useEffect(() => {
-    const { data } = auth.getSession();
-    if (data.session) {
-      router.replace('/onboarding');
-    } else {
-      router.replace('/auth/sign-in');
-    }
+    auth.getSession().then(({ data }) => {
+      if (data.session) {
+        router.replace('/onboarding');
+      } else {
+        router.replace('/auth/sign-in');
+      }
+    });
   }, []);
 
   return (
