@@ -1,5 +1,8 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { enableScreens } from 'react-native-screens';
+
+enableScreens(false);
 
 export default function RootLayout() {
   return (
