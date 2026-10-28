@@ -1,9 +1,5 @@
 /**
  * Lumio Pathways — Entry / Splash redirect
- *
- * Checks for an existing session and routes the user:
- *   - Authenticated  → /onboarding (start assessment)
- *   - Not signed in  → /auth/sign-in
  */
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -12,13 +8,12 @@ import { auth } from '../lib/supabase';
 
 export default function Index() {
   useEffect(() => {
-    auth.getSession().then(({ data }) => {
-      if (data.session) {
-        router.replace('/onboarding');
-      } else {
-        router.replace('/auth/sign-in');
-      }
-    });
+    const { data } = auth.getSession();
+    if (data.session) {
+      router.replace('/onboarding');
+    } else {
+      router.replace('/auth/sign-in');
+    }
   }, []);
 
   return (
