@@ -60,7 +60,7 @@ const QUESTIONS = [
   {
     id: 'q8',
     domain: 'nutrition',
-    text: 'Is your child's GP or paediatrician concerned about their weight or growth?',
+    text: "Is your child's GP or paediatrician concerned about their weight or growth?",
   },
   {
     id: 'q9',
