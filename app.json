@@ -59,9 +59,11 @@
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "lumio-pathways-app"
+        "projectId": "a232ad56-1943-44cc-a624-5410b1405e66"
       }
-    }
+    },
+    "owner": "lumiopathways"
   }
 }
