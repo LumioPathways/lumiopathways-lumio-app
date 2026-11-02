@@ -3,7 +3,7 @@
 // extended with the full table access needed for the real app.
 
 const SUPABASE_URL = 'https://amsmbgeycleatljbqlli.supabase.co';
-const SUPABASE_KEY = 'sb_publishable_q-qgAb0ms8cEjg43U58QAg_z6rCd2EI';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtc21iZ2V5Y2xlYXRsamJxbGxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzk4OTMsImV4cCI6MjEwNTg1NTg5M30.x5TE4OR44NjegkgtY60QK_0btNB3dMgaYbajFiibHqg';
 
 // ── Auth token store ──────────────────────────────────────────────
 let _token: string | null = null;
@@ -41,17 +41,23 @@ export const auth = {
   },
 
   signInWithPassword: async ({ email, password }: { email: string; password: string }) => {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { data: null, error: { message: data.error_description || data.msg || 'Sign in failed' } };
-    _token = data.access_token;
-    _userId = data.user?.id ?? null;
-    _userEmail = data.user?.email ?? email;
-    return { data, error: null };
+    try {
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email, password }),
+      });
+      const text = await res.text();
+      let data: any = {};
+      try { data = JSON.parse(text); } catch { return { data: null, error: { message: 'Invalid response: ' + text.slice(0, 200) } }; }
+      if (!res.ok) return { data: null, error: { message: data.error_description || data.msg || data.message || data.error || JSON.stringify(data) } };
+      _token = data.access_token;
+      _userId = data.user?.id ?? null;
+      _userEmail = data.user?.email ?? email;
+      return { data, error: null };
+    } catch (e: any) {
+      return { data: null, error: { message: 'Network error: ' + (e?.message || String(e)) } };
+    }
   },
 
   signOut: async () => {
@@ -80,6 +86,7 @@ type QueryBuilder = {
   update: (values: object) => QueryBuilder;
   upsert: (rows: object | object[]) => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
+  order: (col: string, opts?: { ascending?: boolean }) => QueryBuilder;
   single: () => Promise<{ data: unknown; error: unknown }>;
   then: (resolve: (v: { data: unknown; error: unknown }) => void, reject?: (e: unknown) => void) => Promise<void>;
 };
@@ -103,9 +110,14 @@ function buildQuery(table: string): QueryBuilder {
 
     const headers: Record<string, string> = {
       ...authHeaders(),
-      'Prefer': singleRow ? 'return=representation,count=exact' : (preferReturn || 'return=representation'),
     };
-    if (singleRow) headers['Accept'] = 'application/vnd.pgrst.object+json';
+    if (method !== 'GET' && method !== 'DELETE') {
+      headers['Prefer'] = preferReturn || 'return=representation';
+    }
+    if (singleRow) {
+      headers['Prefer'] = 'return=representation,count=exact';
+      headers['Accept'] = 'application/vnd.pgrst.object+json';
+    }
 
     const res = await fetch(url, { method, headers, body });
     if (method === 'DELETE' && res.status === 204) return { data: null, error: null };
@@ -132,7 +144,17 @@ function buildQuery(table: string): QueryBuilder {
       preferReturn = 'return=representation,resolution=merge-duplicates';
       return builder;
     },
-    eq(col, val) { filters.push(`${col}=eq.${encodeURIComponent(String(val))}`); return builder; },
+    eq(col, val) {
+      // PostgREST expects booleans as 'true'/'false' (unquoted)
+      const encoded = typeof val === 'boolean' ? String(val) : encodeURIComponent(String(val));
+      filters.push(`${col}=eq.${encoded}`);
+      return builder;
+    },
+    order(col: string, opts?: { ascending?: boolean }) {
+      const dir = opts?.ascending === false ? 'desc' : 'asc';
+      filters.push(`order=${col}.${dir}`);
+      return builder;
+    },
     single() { singleRow = true; return exec(); },
     then(resolve, reject) { return exec().then(resolve, reject); },
   };

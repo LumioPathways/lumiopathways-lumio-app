@@ -3,12 +3,12 @@
  */
 import React, { useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Pressable,
   StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Keyboard, ScrollView,
 } from 'react-native';
 import { router, Link } from 'expo-router';
-import { auth } from '../../lib/supabase';
+import { auth, from, getUserId } from '../../lib/supabase';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -16,17 +16,47 @@ export default function SignIn() {
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async () => {
+    console.log('[SignIn] email:', JSON.stringify(email), 'password length:', password.length);
     if (!email.trim() || !password) {
-      Alert.alert('Missing details', 'Please enter your email and password.');
+      Alert.alert('Missing details', `Email: "${email.trim()}" Password length: ${password.length}`);
       return;
     }
     setLoading(true);
     const { error } = await auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setLoading(false);
     if (error) {
-      Alert.alert('Sign in failed', error.message);
+      Alert.alert('Sign in failed', JSON.stringify(error));
       return;
     }
+    // Look up staff_roles first; fall back to family role
+    // Re-fetch session to ensure userId is available after sign-in
+    // Small delay ensures the auth state has propagated before querying RLS-protected tables
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const { data: sessionData } = await auth.getSession();
+    const userId = sessionData?.session?.user?.id ?? getUserId();
+    if (userId) {
+      // Query the staff_roles table for an active role
+      const { data: staffRows, error: staffError } = await from('staff_roles')
+        .select('role')
+        .eq('user_id', userId);
+
+      console.log('[SignIn] staffRows:', JSON.stringify(staffRows), 'error:', JSON.stringify(staffError));
+
+      if (Array.isArray(staffRows) && staffRows.length > 0) {
+        const roles = staffRows.map((r: any) => r.role);
+        console.log('[SignIn] roles found:', roles);
+        if (roles.includes('super_admin') || roles.includes('support') || roles.includes('content_reviewer')) {
+          router.replace('/dashboard/admin'); return;
+        }
+        if (roles.includes('clinical_lead') || roles.includes('paediatrician')) {
+          router.replace('/dashboard/clinician'); return;
+        }
+        if (roles.includes('slt') || roles.includes('clinical_coordinator')) {
+          router.replace('/dashboard/slt'); return;
+        }
+      }
+    }
+    // Default: parent / family onboarding
     router.replace('/onboarding');
   };
 
@@ -35,7 +65,9 @@ export default function SignIn() {
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
       >
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Wordmark */}
         <View style={styles.header}>
           <Text style={styles.wordmark}>Lumio</Text>
@@ -80,6 +112,10 @@ export default function SignIn() {
             }
           </TouchableOpacity>
 
+          <TouchableOpacity onPress={() => router.push('/auth/forgot-password')} style={styles.forgotLink}>
+            <Text style={styles.link}>Forgot password?</Text>
+          </TouchableOpacity>
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
             <Link href="/auth/sign-up">
@@ -87,30 +123,34 @@ export default function SignIn() {
             </Link>
           </View>
         </View>
+      </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const AMBER = '#F59E0B';
+const NAVY = '#0D2137';
+const AMBER = '#F5A623';
+const TEAL = '#1B4D4A';
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FFFBEB' },
-  container: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  safe: { flex: 1, backgroundColor: NAVY },
+  container: { flex: 1 },
+  scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 32 },
-  wordmark: { fontSize: 36, fontWeight: '800', color: AMBER, letterSpacing: -1 },
-  tagline: { fontSize: 14, color: '#6B7280', marginTop: 4 },
+  wordmark: { fontSize: 36, fontWeight: '800', color: '#ffffff', letterSpacing: -1 },
+  tagline: { fontSize: 14, color: 'rgba(255,255,255,0.55)', marginTop: 4, letterSpacing: 0.5 },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 28,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 24 },
+  title: { fontSize: 22, fontWeight: '700', color: NAVY, marginBottom: 24 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
   input: {
     borderWidth: 1.5,
@@ -132,7 +172,8 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  forgotLink: { alignItems: 'center', marginTop: 4, marginBottom: 8 },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   footerText: { color: '#6B7280', fontSize: 14 },
-  link: { color: AMBER, fontWeight: '600', fontSize: 14 },
+  link: { color: TEAL, fontWeight: '600', fontSize: 14 },
 });

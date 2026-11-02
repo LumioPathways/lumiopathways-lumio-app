@@ -19,7 +19,10 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Lumio Pathways does not use the camera.",
         "NSPhotoLibraryUsageDescription": "Lumio Pathways does not access your photo library.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
       },
       "privacyManifests": {
         "NSPrivacyCollectedDataTypes": [],
@@ -41,6 +44,7 @@
     },
     "plugins": [
       "expo-router",
+      "expo-font",
       [
         "expo-splash-screen",
         {
@@ -55,13 +59,9 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {
-        "origin": false
-      },
       "eas": {
-        "projectId": "a232ad56-1943-44cc-a624-5410b1405e66"
+        "projectId": "lumio-pathways-app"
       }
-    },
-    "owner": "lumiopathways"
+    }
   }
 }
