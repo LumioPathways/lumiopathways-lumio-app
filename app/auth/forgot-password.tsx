@@ -27,7 +27,10 @@ export default function ForgotPassword() {
       await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          redirectTo: 'lumio://auth/reset-password',
+        }),
       });
       setSent(true);
     } catch (e) {
