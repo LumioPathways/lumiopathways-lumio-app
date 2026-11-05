@@ -1,48 +1,69 @@
 /**
  * Lumio Pathways — Reset Password screen
- * Handles the lumio://auth/reset-password?access_token=... deep link
+ * Token is read from RecoveryContext (set by _layout.tsx from the deep link hash).
+ * The screen subscribes to React state so it re-renders when the token arrives
+ * asynchronously (app-already-open case).
  */
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, ScrollView,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { auth } from '../../lib/supabase';
+import { router } from 'expo-router';
+import { useRecovery } from '../../lib/recoveryContext';
 
 const SUPABASE_URL = 'https://amsmbgeycleatljbqlli.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtc21iZ2V5Y2xlYXRsamJxbGxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzk4OTMsImV4cCI6MjEwNTg1NTg5M30.x5TE4OR44NjegkgtY60QK_0btNB3dMgaYbajFiibHqg';
 
+type ScreenState = 'waiting' | 'form' | 'success' | 'error';
+
 export default function ResetPassword() {
-  const params = useLocalSearchParams();
+  const { recovery, clearRecovery } = useRecovery();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const [screen, setScreen] = useState<ScreenState>('waiting');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [validationErr, setValidationErr] = useState('');
 
   useEffect(() => {
-    // The access_token comes in via the deep link query params
-    const t = params.access_token as string ?? params.token as string ?? null;
-    setToken(t);
-    if (!t) {
-      Alert.alert('Invalid link', 'This password reset link is invalid or has expired. Please request a new one.');
-    }
-  }, [params]);
+    if (screen !== 'waiting') return;
 
-  const handleReset = async () => {
-    if (!password || password.length < 6) {
-      Alert.alert('Too short', 'Password must be at least 6 characters.');
+    if (recovery?.access_token) {
+      // Token has arrived — show the form
+      setScreen('form');
       return;
+    }
+
+    // Wait up to 2 seconds for the token to arrive via deep link handler
+    const timeout = setTimeout(() => {
+      if (!recovery?.access_token) {
+        setErrorMsg('This password reset link is invalid or has expired. Please request a new one.');
+        setScreen('error');
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [recovery, screen]);
+
+  const validate = () => {
+    if (!password || password.length < 8) {
+      setValidationErr('Password must be at least 8 characters.');
+      return false;
     }
     if (password !== confirm) {
-      Alert.alert('Mismatch', 'Passwords do not match.');
-      return;
+      setValidationErr('Passwords do not match.');
+      return false;
     }
-    if (!token) {
-      Alert.alert('Invalid link', 'No reset token found. Please request a new password reset email.');
-      return;
-    }
+    setValidationErr('');
+    return true;
+  };
+
+  const handleReset = async () => {
+    if (!validate()) return;
+    if (!recovery?.access_token) return;
+
     setLoading(true);
     try {
       const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
@@ -50,24 +71,79 @@ export default function ResetPassword() {
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${recovery.access_token}`,
         },
         body: JSON.stringify({ password }),
       });
       const data = await res.json();
+
       if (!res.ok) {
-        Alert.alert('Error', data.message || 'Failed to update password.');
+        if (res.status === 401 || data.message?.toLowerCase().includes('expired')) {
+          setErrorMsg('Your password reset link has expired. Please request a new password reset email.');
+        } else {
+          setErrorMsg(data.message || 'Unable to update password. Please try again.');
+        }
+        setScreen('error');
       } else {
-        Alert.alert('Success', 'Your password has been updated. Please sign in.', [
-          { text: 'Sign in', onPress: () => router.replace('/auth/sign-in') },
-        ]);
+        clearRecovery();
+        setScreen('success');
       }
-    } catch (e) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } catch {
+      setErrorMsg('Unable to connect. Please check your connection and try again.');
+      setScreen('error');
     } finally {
       setLoading(false);
     }
   };
+
+  if (screen === 'waiting') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centred}>
+          <ActivityIndicator size="large" color="#F5A623" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'success') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centred}>
+          <View style={styles.card}>
+            <Text style={styles.successIcon}>✅</Text>
+            <Text style={styles.title}>Password updated</Text>
+            <Text style={styles.subtitle}>
+              Your password has been updated successfully. Please sign in using your new password.
+            </Text>
+            <TouchableOpacity style={styles.btn} onPress={() => router.replace('/auth/sign-in')}>
+              <Text style={styles.btnText}>Sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (screen === 'error') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centred}>
+          <View style={styles.card}>
+            <Text style={styles.errorIcon}>⚠️</Text>
+            <Text style={styles.title}>Link problem</Text>
+            <Text style={styles.subtitle}>{errorMsg}</Text>
+            <TouchableOpacity style={styles.btn} onPress={() => router.replace('/auth/forgot-password')}>
+              <Text style={styles.btnText}>Request new link</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.replace('/auth/sign-in')} style={styles.backLink}>
+              <Text style={styles.backText}>Back to sign in</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -89,8 +165,8 @@ export default function ResetPassword() {
             <TextInput
               style={styles.input}
               value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
+              onChangeText={v => { setPassword(v); setValidationErr(''); }}
+              placeholder="At least 8 characters"
               placeholderTextColor="#9CA3AF"
               secureTextEntry
               returnKeyType="next"
@@ -100,13 +176,17 @@ export default function ResetPassword() {
             <TextInput
               style={styles.input}
               value={confirm}
-              onChangeText={setConfirm}
+              onChangeText={v => { setConfirm(v); setValidationErr(''); }}
               placeholder="••••••••"
               placeholderTextColor="#9CA3AF"
               secureTextEntry
               returnKeyType="done"
               onSubmitEditing={handleReset}
             />
+
+            {validationErr ? (
+              <Text style={styles.validationErr}>{validationErr}</Text>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.btn, loading && styles.btnDisabled]}
@@ -136,6 +216,7 @@ const TEAL = '#1B4D4A';
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: NAVY },
   container: { flex: 1 },
+  centred: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
   scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   header: { alignItems: 'center', marginBottom: 32 },
   wordmark: { fontSize: 36, fontWeight: '800', color: '#ffffff', letterSpacing: -1 },
@@ -150,8 +231,10 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
-  title: { fontSize: 22, fontWeight: '700', color: NAVY, marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 24 },
+  successIcon: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
+  errorIcon: { fontSize: 40, textAlign: 'center', marginBottom: 12 },
+  title: { fontSize: 22, fontWeight: '700', color: NAVY, marginBottom: 8, textAlign: 'center' },
+  subtitle: { fontSize: 14, color: '#6B7280', marginBottom: 24, lineHeight: 20, textAlign: 'center' },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
   input: {
     borderWidth: 1.5,
@@ -164,6 +247,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     backgroundColor: '#F9FAFB',
   },
+  validationErr: { color: '#EF4444', fontSize: 13, marginBottom: 12, textAlign: 'center' },
   btn: {
     backgroundColor: AMBER,
     borderRadius: 14,

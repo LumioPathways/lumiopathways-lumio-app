@@ -4,13 +4,15 @@ import { StatusBar } from 'expo-status-bar';
 import { Linking } from 'react-native';
 import { enableScreens } from 'react-native-screens';
 import { router } from 'expo-router';
-import { auth } from '../lib/supabase';
+import { RecoveryProvider, useRecovery } from '../lib/recoveryContext';
 import CookieBanner from '../components/CookieBanner';
 
 enableScreens(false);
 
+// Boolean flag for index.tsx bail-out only — not the token
+export let pendingRecovery: boolean = false;
+
 function parseFragment(url: string): Record<string, string> {
-  // Handle both hash (#) and query (?) fragments — Supabase uses hash
   const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
   const result: Record<string, string> = {};
   (fragment ?? '').split('&').forEach(pair => {
@@ -20,37 +22,40 @@ function parseFragment(url: string): Record<string, string> {
   return result;
 }
 
-async function handleDeepLink(url: string): Promise<boolean> {
-  const params = parseFragment(url);
-  if (params.type === 'recovery' && params.access_token) {
-    // Restore session so the reset screen can call PUT /auth/v1/user
-    await auth.setSession({
-      access_token: params.access_token,
-      refresh_token: params.refresh_token,
-    });
-    router.replace({
-      pathname: '/auth/reset-password',
-      params: { access_token: params.access_token },
-    });
-    return true;
-  }
-  return false;
-}
+function RootLayoutInner() {
+  const { setRecovery } = useRecovery();
 
-export default function RootLayout() {
+  const handleDeepLink = (url: string, navigate = true): boolean => {
+    const params = parseFragment(url);
+    if (params.type === 'recovery' && params.access_token) {
+      pendingRecovery = true;
+      setRecovery({ access_token: params.access_token, refresh_token: params.refresh_token });
+      if (navigate) {
+        router.replace('/auth/reset-password');
+      }
+      return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
-    // Case 1: app was closed — tap link opens it cold
+    // Case 1: app launched cold — get the initial URL
     Linking.getInitialURL().then(url => {
-      if (url) handleDeepLink(url);
+      if (url) {
+        const isRecovery = handleDeepLink(url, false);
+        if (isRecovery) {
+          setTimeout(() => router.replace('/auth/reset-password'), 150);
+        }
+      }
     });
 
-    // Case 2: app is already open — tap link foregrounds it
+    // Case 2: app already open — link foregrounds it
     const sub = Linking.addEventListener('url', ({ url }) => {
-      handleDeepLink(url);
+      handleDeepLink(url, true);
     });
 
     return () => sub.remove();
-  }, []);
+  }, [setRecovery]);
 
   return (
     <>
@@ -80,5 +85,13 @@ export default function RootLayout() {
       </Stack>
       <CookieBanner />
     </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <RecoveryProvider>
+      <RootLayoutInner />
+    </RecoveryProvider>
   );
 }
