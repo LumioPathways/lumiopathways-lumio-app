@@ -36,14 +36,10 @@ export default function SignIn() {
     const { data: sessionData } = await auth.getSession();
     const userId = sessionData?.session?.user?.id ?? getUserId();
 
-    Alert.alert('DEBUG', `userId: ${userId ?? 'null'}\nsession: ${sessionData?.session ? 'yes' : 'no'}`);
-
     if (userId) {
-      const { data: staffRows, error: staffError } = await from('staff_roles')
+      const { data: staffRows } = await from('staff_roles')
         .select('role')
         .eq('user_id', userId);
-
-      Alert.alert('DEBUG roles', `rows: ${JSON.stringify(staffRows)}\nerr: ${JSON.stringify(staffError)}`);
 
       if (Array.isArray(staffRows) && staffRows.length > 0) {
         const roles = staffRows.map((r: any) => r.role);
