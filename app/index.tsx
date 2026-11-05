@@ -8,11 +8,20 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { auth, from } from '../lib/supabase';
+import { pendingRecovery } from './_layout'; // boolean flag only
 
 export default function Index() {
   useEffect(() => {
+    // Guard: if this component unmounts before async work finishes,
+    // do not fire any navigation — another screen has already taken over.
+    let active = true;
+
     (async () => {
+      if (pendingRecovery) return;
+
       const { data: sessionData } = await auth.getSession();
+      if (!active) return; // navigated away already
+
       if (!sessionData?.session) {
         router.replace('/auth/sign-in');
         return;
@@ -22,6 +31,8 @@ export default function Index() {
       const { data: staffRows } = await from('staff_roles')
         .select('role')
         .eq('user_id', userId);
+
+      if (!active) return; // navigated away already
 
       if (Array.isArray(staffRows) && staffRows.length > 0) {
         const roles = (staffRows as any[]).map((r: any) => r.role);
@@ -38,6 +49,8 @@ export default function Index() {
 
       router.replace('/onboarding');
     })();
+
+    return () => { active = false; };
   }, []);
 
   return (
