@@ -8,7 +8,7 @@ import {
   ActivityIndicator, Alert, Keyboard, ScrollView,
 } from 'react-native';
 import { router, Link } from 'expo-router';
-import { auth, from, getUserId } from '../../lib/supabase';
+import { auth } from '../../lib/supabase';
 import { clearPendingRecovery } from '../_layout';
 
 export default function SignIn() {
@@ -28,34 +28,14 @@ export default function SignIn() {
     const { error } = await auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setLoading(false);
     if (error) {
-      Alert.alert('Sign in failed', JSON.stringify(error));
+      Alert.alert('Sign in failed', error.message || JSON.stringify(error));
       return;
     }
-    // Re-fetch session to ensure userId is available after sign-in
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const { data: sessionData } = await auth.getSession();
-    const userId = sessionData?.session?.user?.id ?? getUserId();
 
-    if (userId) {
-      const { data: staffRows } = await from('staff_roles')
-        .select('role')
-        .eq('user_id', userId);
-
-      if (Array.isArray(staffRows) && staffRows.length > 0) {
-        const roles = staffRows.map((r: any) => r.role);
-        if (roles.includes('super_admin') || roles.includes('support') || roles.includes('content_reviewer')) {
-          router.replace('/dashboard/admin'); return;
-        }
-        if (roles.includes('clinical_lead') || roles.includes('paediatrician')) {
-          router.replace('/dashboard/clinician'); return;
-        }
-        if (roles.includes('slt') || roles.includes('clinical_coordinator')) {
-          router.replace('/dashboard/slt'); return;
-        }
-      }
-    }
-    // Default: parent / family onboarding
-    router.replace('/onboarding');
+    // Navigate back to index — it is the single source of truth for
+    // role-based routing. This avoids a race between sign-in's routing
+    // logic and index.tsx's already-running async chain.
+    router.replace('/');
   };
 
   return (
