@@ -209,7 +209,7 @@ export default function BookAppointment() {
 
         <Text style={styles.title}>Book a consultation</Text>
         <Text style={styles.subtitle}>
-          Discuss {childName ? `${childName}'s` : 'your child's'} profile in depth with one of our consultant paediatricians.
+          Discuss {childName ? `${childName}'s` : "your child's"} profile in depth with one of our consultant paediatricians.
         </Text>
 
         {/* Doctors panel */}
