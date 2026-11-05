@@ -15,6 +15,7 @@ export default function SignIn() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSignIn = async () => {
     console.log('[SignIn] email:', JSON.stringify(email), 'password length:', password.length);
@@ -30,23 +31,22 @@ export default function SignIn() {
       Alert.alert('Sign in failed', JSON.stringify(error));
       return;
     }
-    // Look up staff_roles first; fall back to family role
     // Re-fetch session to ensure userId is available after sign-in
-    // Small delay ensures the auth state has propagated before querying RLS-protected tables
     await new Promise(resolve => setTimeout(resolve, 300));
     const { data: sessionData } = await auth.getSession();
     const userId = sessionData?.session?.user?.id ?? getUserId();
+
+    Alert.alert('DEBUG', `userId: ${userId ?? 'null'}\nsession: ${sessionData?.session ? 'yes' : 'no'}`);
+
     if (userId) {
-      // Query the staff_roles table for an active role
       const { data: staffRows, error: staffError } = await from('staff_roles')
         .select('role')
         .eq('user_id', userId);
 
-      console.log('[SignIn] staffRows:', JSON.stringify(staffRows), 'error:', JSON.stringify(staffError));
+      Alert.alert('DEBUG roles', `rows: ${JSON.stringify(staffRows)}\nerr: ${JSON.stringify(staffError)}`);
 
       if (Array.isArray(staffRows) && staffRows.length > 0) {
         const roles = staffRows.map((r: any) => r.role);
-        console.log('[SignIn] roles found:', roles);
         if (roles.includes('super_admin') || roles.includes('support') || roles.includes('content_reviewer')) {
           router.replace('/dashboard/admin'); return;
         }
@@ -92,16 +92,21 @@ export default function SignIn() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor="#9CA3AF"
-            secureTextEntry
-            returnKeyType="done"
-            onSubmitEditing={handleSignIn}
-          />
+          <View style={styles.passwordRow}>
+            <TextInput
+              style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry={!showPassword}
+              returnKeyType="done"
+              onSubmitEditing={handleSignIn}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
+              <Text style={styles.eyeText}>{showPassword ? '🙈' : '👁️'}</Text>
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.btn, loading && styles.btnDisabled]}
@@ -174,6 +179,9 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  passwordRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 8 },
+  eyeBtn: { paddingHorizontal: 8, paddingVertical: 13 },
+  eyeText: { fontSize: 20 },
   forgotLink: { alignItems: 'center', marginTop: 4, marginBottom: 8 },
   footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 20 },
   footerText: { color: '#6B7280', fontSize: 14 },
