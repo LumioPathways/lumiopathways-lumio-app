@@ -1,35 +1,52 @@
+/**
+ * Lumio Pathways — Entry / Splash redirect
+ *
+ * Deep link handling (password reset) is in _layout.tsx.
+ * This screen only handles session-based routing.
+ */
 import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
-import { auth } from '../lib/supabase';
+import { auth, from } from '../lib/supabase';
 
 export default function Index() {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const { data } = auth.getSession();
-        if (data.session) {
-          router.replace('/onboarding');
-        } else {
-          router.replace('/auth/sign-in');
-        }
-      } catch (e) {
-        // If navigation fails, try again after another delay
-        setTimeout(() => {
-          router.replace('/auth/sign-in');
-        }, 500);
+    (async () => {
+      const { data: sessionData } = await auth.getSession();
+      if (!sessionData?.session) {
+        router.replace('/auth/sign-in');
+        return;
       }
-    }, 500);
-    return () => clearTimeout(timer);
+
+      const userId = sessionData.session.user.id;
+      const { data: staffRows } = await from('staff_roles')
+        .select('role')
+        .eq('user_id', userId);
+
+      if (Array.isArray(staffRows) && staffRows.length > 0) {
+        const roles = (staffRows as any[]).map((r: any) => r.role);
+        if (roles.includes('super_admin') || roles.includes('support') || roles.includes('content_reviewer')) {
+          router.replace('/dashboard/admin'); return;
+        }
+        if (roles.includes('clinical_lead') || roles.includes('paediatrician')) {
+          router.replace('/dashboard/clinician'); return;
+        }
+        if (roles.includes('slt') || roles.includes('clinical_coordinator')) {
+          router.replace('/dashboard/slt'); return;
+        }
+      }
+
+      router.replace('/onboarding');
+    })();
   }, []);
 
   return (
     <View style={styles.container}>
-      <ActivityIndicator size="large" color="#FBBF24" />
+      <ActivityIndicator size="large" color="#F5A623" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFBEB' },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0D2137' },
 });
