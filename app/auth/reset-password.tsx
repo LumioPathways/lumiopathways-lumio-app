@@ -10,8 +10,9 @@ import {
   StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform,
   ActivityIndicator, ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useRecovery } from '../../lib/recoveryContext';
+import { clearPendingRecovery } from '../_layout';
 
 const SUPABASE_URL = 'https://amsmbgeycleatljbqlli.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtc21iZ2V5Y2xlYXRsamJxbGxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzk4OTMsImV4cCI6MjEwNTg1NTg5M30.x5TE4OR44NjegkgtY60QK_0btNB3dMgaYbajFiibHqg';
@@ -20,6 +21,16 @@ type ScreenState = 'waiting' | 'form' | 'success' | 'error';
 
 export default function ResetPassword() {
   const { recovery, clearRecovery } = useRecovery();
+  // Route params are synchronously available on mount — no race condition.
+  // This is the primary token source; context is the fallback for the
+  // already-open-app case where navigate fires before params arrive.
+  const params = useLocalSearchParams<{ access_token?: string; refresh_token?: string }>();
+
+  // Resolve the token: route param wins (available immediately on mount),
+  // then context (async, may arrive slightly later).
+  const accessToken = params.access_token || recovery?.access_token || null;
+  const refreshToken = params.refresh_token || recovery?.refresh_token || undefined;
+
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,22 +41,22 @@ export default function ResetPassword() {
   useEffect(() => {
     if (screen !== 'waiting') return;
 
-    if (recovery?.access_token) {
-      // Token has arrived — show the form
+    if (accessToken) {
+      // Token is here — show the form immediately
       setScreen('form');
       return;
     }
 
-    // Wait up to 2 seconds for the token to arrive via deep link handler
+    // Safety net: wait up to 3 seconds in case context arrives asynchronously
     const timeout = setTimeout(() => {
-      if (!recovery?.access_token) {
+      if (!accessToken) {
         setErrorMsg('This password reset link is invalid or has expired. Please request a new one.');
         setScreen('error');
       }
     }, 3000);
 
     return () => clearTimeout(timeout);
-  }, [recovery, screen]);
+  }, [accessToken, screen]);
 
   const validate = () => {
     if (!password || password.length < 8) {
@@ -62,7 +73,7 @@ export default function ResetPassword() {
 
   const handleReset = async () => {
     if (!validate()) return;
-    if (!recovery?.access_token) return;
+    if (!accessToken) return;
 
     setLoading(true);
     try {
@@ -71,7 +82,7 @@ export default function ResetPassword() {
         headers: {
           'Content-Type': 'application/json',
           'apikey': SUPABASE_KEY,
-          'Authorization': `Bearer ${recovery.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ password }),
       });
@@ -86,6 +97,7 @@ export default function ResetPassword() {
         setScreen('error');
       } else {
         clearRecovery();
+        clearPendingRecovery();
         setScreen('success');
       }
     } catch {

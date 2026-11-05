@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { router, Link } from 'expo-router';
 import { auth, from, getUserId } from '../../lib/supabase';
+import { clearPendingRecovery } from '../_layout';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -22,6 +23,7 @@ export default function SignIn() {
       return;
     }
     setLoading(true);
+    clearPendingRecovery();
     const { error } = await auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     setLoading(false);
     if (error) {

@@ -11,6 +11,7 @@ enableScreens(false);
 
 // Boolean flag for index.tsx bail-out only — not the token
 export let pendingRecovery: boolean = false;
+export function clearPendingRecovery() { pendingRecovery = false; }
 
 function parseFragment(url: string): Record<string, string> {
   const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
@@ -29,9 +30,17 @@ function RootLayoutInner() {
     const params = parseFragment(url);
     if (params.type === 'recovery' && params.access_token) {
       pendingRecovery = true;
+      // Store in context AND pass as route param — route params are
+      // synchronously available on mount, eliminating any race condition.
       setRecovery({ access_token: params.access_token, refresh_token: params.refresh_token });
       if (navigate) {
-        router.replace('/auth/reset-password');
+        router.replace({
+          pathname: '/auth/reset-password',
+          params: {
+            access_token: params.access_token,
+            refresh_token: params.refresh_token ?? '',
+          },
+        });
       }
       return true;
     }
@@ -44,7 +53,14 @@ function RootLayoutInner() {
       if (url) {
         const isRecovery = handleDeepLink(url, false);
         if (isRecovery) {
-          setTimeout(() => router.replace('/auth/reset-password'), 150);
+          // Small delay so the navigator is mounted before we push
+          setTimeout(() => router.replace({
+            pathname: '/auth/reset-password',
+            params: {
+              access_token: parseFragment(url).access_token,
+              refresh_token: parseFragment(url).refresh_token ?? '',
+            },
+          }), 150);
         }
       }
     });
