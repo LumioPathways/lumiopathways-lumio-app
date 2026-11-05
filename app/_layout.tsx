@@ -13,6 +13,11 @@ enableScreens(false);
 export let pendingRecovery: boolean = false;
 export function clearPendingRecovery() { pendingRecovery = false; }
 
+// Set true after sign-in so index.tsx doesn't fire its own redirect
+export let justSignedIn: boolean = false;
+export function setJustSignedIn() { justSignedIn = true; }
+export function clearJustSignedIn() { justSignedIn = false; }
+
 function parseFragment(url: string): Record<string, string> {
   const fragment = url.includes('#') ? url.split('#')[1] : url.split('?')[1] ?? '';
   const result: Record<string, string> = {};
