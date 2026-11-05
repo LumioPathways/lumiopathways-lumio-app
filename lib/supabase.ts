@@ -2,8 +2,12 @@
 // Mirrors the lightweight client from the Expo Snack prototype,
 // extended with the full table access needed for the real app.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const SUPABASE_URL = 'https://amsmbgeycleatljbqlli.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFtc21iZ2V5Y2xlYXRsamJxbGxpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAyNzk4OTMsImV4cCI6MjEwNTg1NTg5M30.x5TE4OR44NjegkgtY60QK_0btNB3dMgaYbajFiibHqg';
+
+const STORAGE_KEY = 'lumio_session';
 
 // ── Auth token store ──────────────────────────────────────────────
 let _token: string | null = null;
@@ -13,6 +17,30 @@ let _userEmail: string | null = null;
 export function getToken() { return _token; }
 export function getUserId() { return _userId; }
 export function getUserEmail() { return _userEmail; }
+
+// Persist session to AsyncStorage so it survives module re-initialisation
+async function saveSession() {
+  try {
+    if (_token) {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ _token, _userId, _userEmail }));
+    } else {
+      await AsyncStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {}
+}
+
+// Restore session from AsyncStorage (call once on app start)
+export async function restoreSession() {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      _token = s._token ?? null;
+      _userId = s._userId ?? null;
+      _userEmail = s._userEmail ?? null;
+    }
+  } catch {}
+}
 
 function authHeaders() {
   return {
@@ -54,6 +82,7 @@ export const auth = {
       _token = data.access_token;
       _userId = data.user?.id ?? null;
       _userEmail = data.user?.email ?? email;
+      await saveSession();
       return { data, error: null };
     } catch (e: any) {
       return { data: null, error: { message: 'Network error: ' + (e?.message || String(e)) } };
@@ -70,6 +99,7 @@ export const auth = {
     _token = null;
     _userId = null;
     _userEmail = null;
+    await saveSession();
     return { error: null };
   },
 
@@ -77,6 +107,28 @@ export const auth = {
     data: { session: _token ? { access_token: _token, user: { id: _userId, email: _userEmail } } : null },
     error: null,
   }),
+
+  // Restore a session from tokens (used for password recovery deep links)
+  setSession: async ({ access_token, refresh_token }: { access_token: string; refresh_token?: string }) => {
+    try {
+      // Verify the token by fetching the user
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${access_token}`,
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) return { data: null, error: { message: data.message || 'Invalid token' } };
+      _token = access_token;
+      _userId = data.id ?? null;
+      _userEmail = data.email ?? null;
+      await saveSession();
+      return { data: { session: { access_token, user: data } }, error: null };
+    } catch (e: any) {
+      return { data: null, error: { message: 'Network error: ' + (e?.message || String(e)) } };
+    }
+  },
 };
 
 // ── Database helpers ──────────────────────────────────────────────

@@ -31,10 +31,8 @@ export default function SignIn() {
       Alert.alert('Sign in failed', error.message || JSON.stringify(error));
       return;
     }
-
-    // Navigate back to index — it is the single source of truth for
-    // role-based routing. This avoids a race between sign-in's routing
-    // logic and index.tsx's already-running async chain.
+    // Session is now saved to AsyncStorage inside signInWithPassword.
+    // index.tsx will restore it and handle role-based routing.
     router.replace('/');
   };
 

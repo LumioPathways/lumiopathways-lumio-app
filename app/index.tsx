@@ -8,7 +8,8 @@ import { useEffect } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { auth, from } from '../lib/supabase';
-import { pendingRecovery } from './_layout'; // boolean flag only
+import { pendingRecovery, justSignedIn, clearJustSignedIn } from './_layout';
+import { getToken } from '../lib/supabase';
 
 export default function Index() {
   useEffect(() => {
@@ -18,6 +19,9 @@ export default function Index() {
 
     (async () => {
       if (pendingRecovery) return;
+      if (justSignedIn) { clearJustSignedIn(); return; }
+      // Extra guard: if a token exists, sign-in already handled routing
+      if (getToken()) return;
 
       const { data: sessionData } = await auth.getSession();
       if (!active) return; // navigated away already
